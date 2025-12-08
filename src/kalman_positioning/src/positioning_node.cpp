@@ -6,6 +6,7 @@
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "kalman_positioning/ukf.hpp"
+#include "kalman_positioning/landmark_manager.hpp"
 
 
 #include <memory>
@@ -30,15 +31,29 @@ public:
     PositioningNode() : Node("kalman_positioning_node") {
         RCLCPP_INFO(this->get_logger(), "Initializing Kalman Positioning Node");
 
-        double process_noise_xy = 0.1;
-        double process_noise_theta = 0.05;
-        double measurement_noise_xy = 0.01;
+    this->declare_parameter<std::string>("landmarks_csv_path", "");
+    this->declare_parameter<double>("process_noise_xy", 0.2);
+    this->declare_parameter<double>("process_noise_theta", 0.01);
+    this->declare_parameter<double>("measurement_noise_xy", 0.5);
 
-        ukf_ = std::make_unique<UKF>(
+    std::string csv_path = this->get_parameter("landmarks_csv_path").as_string();
+    double process_noise_xy = this->get_parameter("process_noise_xy").as_double();
+    double process_noise_theta = this->get_parameter("process_noise_theta").as_double();
+    double measurement_noise_xy = this->get_parameter("measurement_noise_xy").as_double();
+
+
+
+    ukf_ = std::make_unique<UKF>(
         process_noise_xy,
         process_noise_theta,
         measurement_noise_xy
         );
+
+        if (!landmarksManager_.loadFromCSV(csv_path)) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to load CSV: %s", csv_path.c_str());
+        } 
+        
+        ukf_->setLandmarks(landmarksManager_.getLandmarks());
 
         // Create subscribers
         odometry_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -77,7 +92,7 @@ private:
     double last_x_;
     double last_y_;
     double last_theta_;
-
+    LandmarkManager landmarksManager_;
 
     // ============================================================================
     // PLACEHOLDER: KALMAN FILTER STATE
@@ -119,7 +134,7 @@ private:
             last_time_ = msg->header.stamp;
             last_x_ = x;
             last_y_ = y;
-            last_theta_ = theta;
+            last_theta_ = normalizeAngle(theta);
             return;
         }
 
@@ -134,14 +149,14 @@ private:
 
         last_x_ = x;
         last_y_ = y;
-        last_theta_ = theta;
+        last_theta_ = normalizeAngle(theta);
 
 
         ukf_->predict(dt, dx, dy, dtheta);
 
         // For now, publish the noisy odometry as estimated
         // Students should replace this with actual filter output
-        publishEstimatedOdometry(msg->header.stamp);
+        // publishEstimatedOdometry(msg->header.stamp);
     }
     
     /**
@@ -187,7 +202,11 @@ private:
             RCLCPP_WARN(this->get_logger(), 
                 "Failed to parse landmark observations: %s", e.what());
         }
+        std::cout << "Before update: x_ = " << ukf_->getState() << std::endl;
+
         ukf_->update(observations);
+        std::cout << "After update: x_ = " << ukf_->getState() << std::endl;
+
         publishEstimatedOdometry(msg->header.stamp);
 
 
@@ -202,6 +221,8 @@ private:
      * @param q Quaternion from orientation
      * @return Yaw angle in radians [-pi, pi]
      */
+
+
     double quaternionToYaw(const geometry_msgs::msg::Quaternion& q) {
         tf2::Quaternion tf_q(q.x, q.y, q.z, q.w);
         double roll, pitch, yaw;

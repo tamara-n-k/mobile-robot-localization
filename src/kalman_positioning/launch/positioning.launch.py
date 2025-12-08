@@ -21,7 +21,7 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('kalman_positioning')
     
     # Default landmarks CSV path
-    landmarks_csv_default = os.path.join(pkg_dir, 'data/landmarks.csv')
+    landmarks_csv_default = os.path.join(pkg_dir, 'landmarks.csv')
     
     # Launch arguments with descriptions
     landmarks_csv_arg = DeclareLaunchArgument(
@@ -32,13 +32,13 @@ def generate_launch_description():
     
     process_noise_xy_arg = DeclareLaunchArgument(
         'process_noise_xy',
-        default_value='1e-4',
+        default_value='0.0001',
         description='Process noise covariance for x,y position. Increase to trust odometry less.'
     )
     
     process_noise_theta_arg = DeclareLaunchArgument(
         'process_noise_theta',
-        default_value='1e-4',
+        default_value='0.0001',
         description='Process noise covariance for orientation. Increase to trust orientation less.'
     )
     

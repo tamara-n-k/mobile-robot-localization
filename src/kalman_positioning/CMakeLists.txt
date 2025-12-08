@@ -21,6 +21,7 @@ include_directories(include)
 add_executable(positioning_node
   src/positioning_node.cpp
   src/ukf.cpp
+  src/landmark_manager.cpp
 )
 
 target_link_libraries(positioning_node

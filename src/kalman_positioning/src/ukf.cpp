@@ -50,7 +50,8 @@ UKF::UKF(double process_noise_xy, double process_noise_theta,
     
     //calculate lambda, gamma and weights
     lambda_ = ALPHA*ALPHA*(nx_ + KAPPA) - nx_;
-    // double gamma_ = std::sqrt(nx_ + lambda_);
+    gamma_ = std::sqrt(nx_ + lambda_);
+
 
     Wm_ = std::vector<double>(2*nx_ + 1);
     Wc_ = std::vector <double>(2*nx_+ 1);
@@ -117,7 +118,7 @@ Eigen::VectorXd UKF::processModel(const Eigen::VectorXd& state, double dt,
     Eigen::VectorXd new_state = state;
     new_state[0] += dx;
     new_state[1] += dy;
-    new_state[2] += dtheta;
+    new_state[2] = normalizeAngle(new_state[2] + dtheta);
     new_state[3] = dx/dt;
     new_state[4] = dy/dt;
     
@@ -185,21 +186,35 @@ void UKF::predict(double dt, double dx, double dy, double dtheta) {
     // STUDENT IMPLEMENTATION STARTS HERE
     // ========================================================================
     std::vector<Eigen::VectorXd> sigma_points = generateSigmaPoints(x_, P_);
-    std::vector<Eigen::VectorXd> sigma_points_pred(sigma_points.size());
+    const int num_sigma = sigma_points.size();
 
-    for (size_t i = 0; i < sigma_points.size(); i++) //generate sigma points through motion model
+    std::vector<Eigen::VectorXd> sigma_points_pred(num_sigma);
+    for (int i = 0; i < num_sigma; i++) //generate sigma points through motion model
     {
         sigma_points_pred[i] = processModel(sigma_points[i], dt, dx, dy, dtheta);
-    }
-    
-    Eigen::VectorXd x_pred = Eigen::VectorXd::Zero(nx_);
-    for (int i = 0; i < 2 * nx_ + 1; i++)
-    {
-        x_pred += sigma_points_pred[i]*Wm_[i];
-    }
-    
-    x_pred[2] = normalizeAngle(x_pred[2]);//normalize angular difference dtheta
+        sigma_points_pred[i][2] = normalizeAngle(sigma_points_pred[i][2]);
 
+    }
+    //compute predicted mean
+    Eigen::VectorXd x_pred = Eigen::VectorXd::Zero(nx_);
+
+    double sin_sum = 0.0;
+    double cos_sum = 0.0;
+
+    for (int i = 0; i < num_sigma; ++i) {
+        x_pred[0] += Wm_[i] * sigma_points_pred[i][0];
+        x_pred[1] += Wm_[i] * sigma_points_pred[i][1];
+
+        sin_sum += Wm_[i] * std::sin(sigma_points_pred[i][2]);
+        cos_sum += Wm_[i] * std::cos(sigma_points_pred[i][2]);
+
+        x_pred[3] += Wm_[i] * sigma_points_pred[i][3];
+        x_pred[4] += Wm_[i] * sigma_points_pred[i][4];
+    }
+
+    x_pred[2] = std::atan2(sin_sum, cos_sum);  // circular mean angle
+
+    //compute predicted covariance
     Eigen::MatrixXd P_pred = Eigen::MatrixXd::Zero(nx_, nx_);//cov
     for (int i = 0; i < 2*nx_ + 1; i++) 
     {
@@ -212,6 +227,7 @@ void UKF::predict(double dt, double dx, double dy, double dtheta) {
 
     //update state & cov estimates
     x_ = x_pred;
+    x_[2] = normalizeAngle(x_[2]);  // ensure state angle is clean
     P_ = P_pred;
 
     std::cout << "Prediction step done." << std::endl;
@@ -250,8 +266,13 @@ void UKF::update(const std::vector<std::tuple<int, double, double, double>>& lan
         double meas_y = std::get<2>(obs);
 
         //generate sigma points for current state
+        // std::cout << "Covariance P_: \n" << P_ << std::endl;
+
         std::vector<Eigen::VectorXd> sigma_points = generateSigmaPoints(x_, P_);
         int num_sigma = sigma_points.size();
+        for (const auto& sp : sigma_points) {
+            std::cout << "Sigma point: " << sp.transpose() << std::endl;
+        }
 
         //predicted measurement mean
         std::vector<Eigen::Vector2d> Z_sig(num_sigma);
@@ -276,6 +297,7 @@ void UKF::update(const std::vector<std::tuple<int, double, double, double>>& lan
 
         //Kalman update
         Eigen::MatrixXd K = Tc * S.inverse();
+        // std::cout << "Kalman gain " << K << std::endl;
 
         //update state
         Eigen::Vector2d landmark_pos(meas_x, meas_y);
