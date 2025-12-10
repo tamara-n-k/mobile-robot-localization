@@ -65,7 +65,6 @@ UKF::UKF(double process_noise_xy, double process_noise_theta,
     }
 
 
-    std::cout << "UKF Constructor: TODO - Implement filter initialization" << std::endl;
 }
 
 
@@ -266,13 +265,8 @@ void UKF::update(const std::vector<std::tuple<int, double, double, double>>& lan
         double meas_y = std::get<2>(obs);
 
         //generate sigma points for current state
-        // std::cout << "Covariance P_: \n" << P_ << std::endl;
-
         std::vector<Eigen::VectorXd> sigma_points = generateSigmaPoints(x_, P_);
         int num_sigma = sigma_points.size();
-        for (const auto& sp : sigma_points) {
-            std::cout << "Sigma point: " << sp.transpose() << std::endl;
-        }
 
         //predicted measurement mean
         std::vector<Eigen::Vector2d> Z_sig(num_sigma);
@@ -297,7 +291,6 @@ void UKF::update(const std::vector<std::tuple<int, double, double, double>>& lan
 
         //Kalman update
         Eigen::MatrixXd K = Tc * S.inverse();
-        // std::cout << "Kalman gain " << K << std::endl;
 
         //update state
         Eigen::Vector2d landmark_pos(meas_x, meas_y);

@@ -202,12 +202,10 @@ private:
             RCLCPP_WARN(this->get_logger(), 
                 "Failed to parse landmark observations: %s", e.what());
         }
-        std::cout << "Before update: x_ = " << ukf_->getState() << std::endl;
 
         ukf_->update(observations);
-        std::cout << "After update: x_ = " << ukf_->getState() << std::endl;
-
         publishEstimatedOdometry(msg->header.stamp);
+
 
 
     }
