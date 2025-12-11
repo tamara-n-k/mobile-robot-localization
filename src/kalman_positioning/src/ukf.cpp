@@ -142,6 +142,8 @@ Eigen::Vector2d UKF::measurementModel(const Eigen::VectorXd& state, int landmark
     // ========================================================================
     
     if (landmarks_.find(landmark_id) == landmarks_.end()) {
+        std::cout << "no landmark" << std::endl;
+
         return Eigen::Vector2d::Zero();
     }
     std::pair landmark_pos = landmarks_[landmark_id];
@@ -259,47 +261,62 @@ void UKF::update(const std::vector<std::tuple<int, double, double, double>>& lan
     // ========================================================================
     
     for (const auto& obs : landmark_observations) 
-    {   //get landmark id and robot state
+    {
         int landmark_id = std::get<0>(obs);
         double meas_x = std::get<1>(obs);
         double meas_y = std::get<2>(obs);
 
-        //generate sigma points for current state
+        // 1. Generate sigma points for CURRENT state
         std::vector<Eigen::VectorXd> sigma_points = generateSigmaPoints(x_, P_);
         int num_sigma = sigma_points.size();
-
-        //predicted measurement mean
+        
+        // 2. Predict measurements for all sigma points
         std::vector<Eigen::Vector2d> Z_sig(num_sigma);
         Eigen::Vector2d z_pred = Eigen::Vector2d::Zero();
         
-        Eigen::Matrix2d S = Eigen::Matrix2d::Zero();//covariance
-        Eigen::Matrix<double, 5, 2> Tc = Eigen::Matrix<double, 5, 2>::Zero();//cross covariance
+        // --- LOOP 1: Calculate Mean ---
+        for (int j = 0; j < num_sigma; j++) {
+            Z_sig[j] = measurementModel(sigma_points[j], landmark_id);
+            z_pred += Wm_[j] * Z_sig[j];
+        }
 
-        for (int j = 0; j < num_sigma; j++)
-        {
-        Z_sig[j] = measurementModel(sigma_points[j], landmark_id);//get measurements
-        z_pred += Wm_[j] * Z_sig[j];//weigh measurements
+        // --- LOOP 2: Calculate Covariances ---
+        Eigen::Matrix2d S = Eigen::Matrix2d::Zero();
+        Eigen::MatrixXd Tc = Eigen::MatrixXd::Zero(nx_, 2); // Dynamic size for safety
 
-        Eigen::Vector2d z_diff = Z_sig[j] - z_pred;//
-        Eigen::VectorXd x_diff = sigma_points[j] - x_;//
+        for (int j = 0; j < num_sigma; j++) {
+            // Residuals
+            Eigen::Vector2d z_diff = Z_sig[j] - z_pred;
+            // Note: No angle normalization needed for z_diff here (Cartesian x,y)
+            
+            // State difference
+            Eigen::VectorXd x_diff = sigma_points[j] - x_;
+            // CRITICAL FIX: Normalize angle in state difference
+            x_diff[2] = normalizeAngle(x_diff[2]);
 
-        S += Wc_[j] * (z_diff * z_diff.transpose());
-        Tc += Wc_[j] * (x_diff * z_diff.transpose());
+            S += Wc_[j] * (z_diff * z_diff.transpose());
+            Tc += Wc_[j] * (x_diff * z_diff.transpose());
         }
     
-        S += R_;//measurement noise
+        // Add measurement noise
+        S += R_;
 
-        //Kalman update
+        // 3. Kalman Gain
         Eigen::MatrixXd K = Tc * S.inverse();
 
-        //update state
+        // 4. Update State
         Eigen::Vector2d landmark_pos(meas_x, meas_y);
-        Eigen::Vector2d innovation = landmark_pos - z_pred;
+        Eigen::Vector2d z_innovation = landmark_pos - z_pred;
+        
+        // Note: No angle normalization needed for z_innovation (Cartesian)
 
-        //update cov
-        x_ = x_ + K * innovation;
+        x_ = x_ + K * z_innovation;
+        
+        // 5. Update Covariance
         P_ = P_ - K * S * K.transpose();
-
+        
+        // Optional: Final angle normalization to keep state clean
+        x_[2] = normalizeAngle(x_[2]);
     }
     std::cout << "Update step done." << std::endl;
 }

@@ -46,6 +46,48 @@ bool LandmarkManager::loadFromCSV(const std::string& csv_path) {
         if (line.empty() || line[0] == '#') {
             continue;
         }
+        std::istringstream ss(line);
+        std::string token;
+        int id;
+        double x, y;
+
+        // Parse ID
+        if (!std::getline(ss, token, ',')) {
+            std::cerr << "Error parsing ID at line " << line_num << std::endl;
+            continue;
+        }
+        try {
+            id = std::stoi(token);
+        } catch (const std::exception& e) {
+            std::cerr << "Invalid ID at line " << line_num << ": " << token << std::endl;
+            continue;
+        }
+
+        // Parse x
+        if (!std::getline(ss, token, ',')) {
+            std::cerr << "Error parsing x at line " << line_num << std::endl;
+            continue;
+        }
+        try {
+            x = std::stod(token);
+        } catch (const std::exception& e) {
+            std::cerr << "Invalid x at line " << line_num << ": " << token << std::endl;
+            continue;
+        }
+
+        // Parse y
+        if (!std::getline(ss, token, ',')) {
+            std::cerr << "Error parsing y at line " << line_num << std::endl;
+            continue;
+        }
+        try {
+            y = std::stod(token);
+        } catch (const std::exception& e) {
+            std::cerr << "Invalid y at line " << line_num << ": " << token << std::endl;
+            continue;
+        }
+
+        landmarks_[id] = std::make_pair(x, y);
     }
     
     file.close();
@@ -58,7 +100,6 @@ bool LandmarkManager::loadFromCSV(const std::string& csv_path) {
     std::cout << "Loaded " << landmarks_.size() << " landmarks from " << csv_path << std::endl;
     return true;
 }
-
 // ============================================================================
 // LANDMARK QUERIES
 // ============================================================================

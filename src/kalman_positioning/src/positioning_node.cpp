@@ -32,9 +32,9 @@ public:
         RCLCPP_INFO(this->get_logger(), "Initializing Kalman Positioning Node");
 
     this->declare_parameter<std::string>("landmarks_csv_path", "");
-    this->declare_parameter<double>("process_noise_xy", 0.2);
-    this->declare_parameter<double>("process_noise_theta", 0.01);
-    this->declare_parameter<double>("measurement_noise_xy", 0.5);
+    this->declare_parameter<double>("process_noise_xy", 0.0001);
+    this->declare_parameter<double>("process_noise_theta", 0.0001);
+    this->declare_parameter<double>("measurement_noise_xy", 0.01);
 
     std::string csv_path = this->get_parameter("landmarks_csv_path").as_string();
     double process_noise_xy = this->get_parameter("process_noise_xy").as_double();
