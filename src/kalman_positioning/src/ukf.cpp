@@ -44,7 +44,7 @@ UKF::UKF(double process_noise_xy, double process_noise_theta,
     Q_(0,0) = process_noise_xy;
     Q_(1,1) = process_noise_xy;
     Q_(2,2) = process_noise_theta;
-    R_ = Eigen::MatrixXd::Zero(2, 2);
+    R_ = Eigen::MatrixXd::Zero(nz_, nz_);
     R_(0,0) = measurement_noise_xy;
     R_(1,1) = measurement_noise_xy;
     
@@ -252,73 +252,77 @@ void UKF::predict(double dt, double dx, double dy, double dtheta) {
  * 6. Update state with innovation
  * 7. Update covariance
  */
-void UKF::update(const std::vector<std::tuple<int, double, double, double>>& landmark_observations) {
-    if (landmark_observations.empty()) {
-        return;
+void UKF::update(const std::vector<std::tuple<int,double,double>>& landmark_observations)
+{
+    int N = landmark_observations.size();
+    int dim_z = 2 * N;
+
+    // 1. Generate sigma points
+    std::vector<Eigen::VectorXd> X_sigma = generateSigmaPoints(x_, P_);
+    int num_sigma = X_sigma.size();
+
+    // 2. Predict measurement mean
+    std::vector<Eigen::VectorXd> Z_sigma(num_sigma, Eigen::VectorXd(dim_z));
+    Eigen::VectorXd z_pred = Eigen::VectorXd::Zero(dim_z);
+
+    for (int i = 0; i < num_sigma; i++) {
+        int row = 0;
+        for (const auto& obs : landmark_observations) {
+            int landmark_id = std::get<0>(obs);
+
+            Eigen::Vector2d z_i = measurementModel(X_sigma[i], landmark_id);
+
+            Z_sigma[i].segment<2>(row) = z_i;
+            row += 2;
+        }
+        z_pred += Wm_[i] * Z_sigma[i];
     }
-    //landmark_observations = (landmark_id, obs_dx, obs_dy, noise_cov)
-    // STUDENT IMPLEMENTATION STARTS HERE
-    // ========================================================================
-    
-    for (const auto& obs : landmark_observations) 
+    // 3. Compute measurement covariance S and cross-covariance Tc
+    Eigen::MatrixXd S = Eigen::MatrixXd::Zero(dim_z, dim_z);
+    Eigen::MatrixXd Tc = Eigen::MatrixXd::Zero(nx_, dim_z);
+
+    for (int i = 0; i < num_sigma; i++) {
+        Eigen::VectorXd z_diff = Z_sigma[i] - z_pred;
+
+        Eigen::VectorXd x_diff = X_sigma[i] - x_;
+        x_diff(2) = normalizeAngle(x_diff(2));
+
+        S  += Wc_[i] * z_diff * z_diff.transpose();
+        Tc += Wc_[i] * x_diff * z_diff.transpose();
+    }
+
+    // Measurement noise block (dim_z × dim_z)
+    Eigen::MatrixXd Rb = Eigen::MatrixXd::Zero(dim_z, dim_z);
+    for (int i = 0; i < N; i++)
+        Rb.block<2,2>(2*i, 2*i) = R_;      // your existing 2×2 noise
+
+    S += Rb;
+
+    // 4. Kalman gain
+    Eigen::MatrixXd K = Tc * S.inverse();
+
+    // 5. Construct measurement vector z
+    Eigen::VectorXd z(dim_z);
     {
-        int landmark_id = std::get<0>(obs);
-        double meas_x = std::get<1>(obs);
-        double meas_y = std::get<2>(obs);
+        int row = 0;
+        for (const auto& obs : landmark_observations) {
+            double meas_x = std::get<1>(obs);
+            double meas_y = std::get<2>(obs);
 
-        // 1. Generate sigma points for CURRENT state
-        std::vector<Eigen::VectorXd> sigma_points = generateSigmaPoints(x_, P_);
-        int num_sigma = sigma_points.size();
-        
-        // 2. Predict measurements for all sigma points
-        std::vector<Eigen::Vector2d> Z_sig(num_sigma);
-        Eigen::Vector2d z_pred = Eigen::Vector2d::Zero();
-        
-        // --- LOOP 1: Calculate Mean ---
-        for (int j = 0; j < num_sigma; j++) {
-            Z_sig[j] = measurementModel(sigma_points[j], landmark_id);
-            z_pred += Wm_[j] * Z_sig[j];
+            z(row + 0) = meas_x;
+            z(row + 1) = meas_y;
+            row += 2;
         }
-
-        // --- LOOP 2: Calculate Covariances ---
-        Eigen::Matrix2d S = Eigen::Matrix2d::Zero();
-        Eigen::MatrixXd Tc = Eigen::MatrixXd::Zero(nx_, 2); // Dynamic size for safety
-
-        for (int j = 0; j < num_sigma; j++) {
-            // Residuals
-            Eigen::Vector2d z_diff = Z_sig[j] - z_pred;
-            // Note: No angle normalization needed for z_diff here (Cartesian x,y)
-            
-            // State difference
-            Eigen::VectorXd x_diff = sigma_points[j] - x_;
-            // CRITICAL FIX: Normalize angle in state difference
-            x_diff[2] = normalizeAngle(x_diff[2]);
-
-            S += Wc_[j] * (z_diff * z_diff.transpose());
-            Tc += Wc_[j] * (x_diff * z_diff.transpose());
-        }
-    
-        // Add measurement noise
-        S += R_;
-
-        // 3. Kalman Gain
-        Eigen::MatrixXd K = Tc * S.inverse();
-
-        // 4. Update State
-        Eigen::Vector2d landmark_pos(meas_x, meas_y);
-        Eigen::Vector2d z_innovation = landmark_pos - z_pred;
-        
-        // Note: No angle normalization needed for z_innovation (Cartesian)
-
-        x_ = x_ + K * z_innovation;
-        
-        // 5. Update Covariance
-        P_ = P_ - K * S * K.transpose();
-        
-        // Optional: Final angle normalization to keep state clean
-        x_[2] = normalizeAngle(x_[2]);
     }
-    std::cout << "Update step done." << std::endl;
+
+    // 6. Update state
+    Eigen::VectorXd z_innov = z - z_pred;
+    x_ = x_ + K * z_innov;
+
+    // 7. Update covariance
+    P_ = P_ - K * S * K.transpose();
+
+    x_(2) = normalizeAngle(x_(2));
 }
 
 // ============================================================================

@@ -32,8 +32,8 @@ public:
         RCLCPP_INFO(this->get_logger(), "Initializing Kalman Positioning Node");
 
     this->declare_parameter<std::string>("landmarks_csv_path", "");
-    this->declare_parameter<double>("process_noise_xy", 0.0001);
-    this->declare_parameter<double>("process_noise_theta", 0.0001);
+    this->declare_parameter<double>("process_noise_xy", 0.01);
+    this->declare_parameter<double>("process_noise_theta", 0.1);
     this->declare_parameter<double>("measurement_noise_xy", 0.01);
 
     std::string csv_path = this->get_parameter("landmarks_csv_path").as_string();
@@ -123,9 +123,7 @@ private:
         RCLCPP_DEBUG(this->get_logger(), 
             "Odometry received: x=%.3f, y=%.3f", 
             msg->pose.pose.position.x, msg->pose.pose.position.y);
-        
-        // STUDENT ASSIGNMENT STARTS HERE
-        // ========================================================================
+
         double x = msg->pose.pose.position.x;
         double y = msg->pose.pose.position.y;
         double theta = quaternionToYaw(msg->pose.pose.orientation);
@@ -153,10 +151,6 @@ private:
 
 
         ukf_->predict(dt, dx, dy, dtheta);
-
-        // For now, publish the noisy odometry as estimated
-        // Students should replace this with actual filter output
-        // publishEstimatedOdometry(msg->header.stamp);
     }
     
     /**
@@ -168,14 +162,12 @@ private:
      * 3. Optionally publish the updated estimated odometry
      */
     void landmarksObservedCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-        // STUDENT ASSIGNMENT STARTS HERE
-        // ========================================================================
-        
+
         RCLCPP_DEBUG(this->get_logger(), 
             "Landmark observation received with %u points", msg->width);
         
-        std::vector<std::tuple<int, double, double, double>> observations;
-        // Placeholder: Parse and log the observations
+        std::vector<std::tuple<int, double, double>> observations;//id, x, y, noise
+        //get landmark info from sensor msg and push back in tuple
         try {
             sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
             sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
@@ -187,7 +179,7 @@ private:
                 int landmark_id = static_cast<int>(*iter_id);
                 float obs_x = static_cast<float>(*iter_x);
                 float obs_y = static_cast<float>(*iter_y);
-                observations.push_back(std::make_tuple(landmark_id, obs_x, obs_y, 0.2));
+                observations.push_back(std::make_tuple(landmark_id, obs_x, obs_y));//constant not used
 
                 RCLCPP_DEBUG(this->get_logger(),
                     "Landmark %d observed at (%.3f, %.3f)",
@@ -203,11 +195,10 @@ private:
                 "Failed to parse landmark observations: %s", e.what());
         }
 
-        ukf_->update(observations);
+        if (!observations.empty()) {
+            ukf_->update(observations);
+        }
         publishEstimatedOdometry(msg->header.stamp);
-
-
-
     }
     
     // ============================================================================
