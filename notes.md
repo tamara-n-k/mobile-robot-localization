@@ -33,3 +33,11 @@ task B pipeline: 5 simulations:
 What did I learn?
 What challenges were there?
 How would I proceed if I started again?
+
+
+do we have 2 rmse for theta and for position
+simulation time: walking rmse, so whenever rmse doesnt change much anymore
+try out parameters, find the best within those i tried out
+live plotting
+take last rmse
+stability: 
