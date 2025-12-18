@@ -330,7 +330,7 @@ private:
     int observed_count = 0;
     
     // Collect observed landmarks
-    std::vector<std::tuple<Landmark, double, double, double>> observed;  // landmark + noise
+    std::vector<std::pair<Landmark, double>> observed;  // landmark + noise
     for (const auto& landmark : landmarks_) {
       double dx = landmark.x - robot_x_;
       double dy = landmark.y - robot_y_;
@@ -338,7 +338,7 @@ private:
       
       // If landmark is within observation radius
       if (distance <= observation_radius_) {
-        observed.push_back({landmark, distance, dx, dy});
+        observed.push_back({landmark, distance});
         observed_count++;
       }
     }
@@ -346,7 +346,7 @@ private:
     // Create PointCloud2 message
     auto pc = std::make_unique<sensor_msgs::msg::PointCloud2>();
     pc->header.stamp = now;
-    pc->header.frame_id = "map";
+    pc->header.frame_id = "robot";
     pc->height = 1;
     pc->width = observed.size();
     
@@ -381,14 +381,26 @@ private:
     for (size_t i = 0; i < observed.size(); ++i) {
       double noise_x = noise_dist_(rng_) * std_dev;
       double noise_y = noise_dist_(rng_) * std_dev;
-      
-      float* ptr = (float*)&pc->data[i * pc->point_step];
-      ptr[0] = std::get<2>(observed[i]) + noise_x;  // x with noise
-      ptr[1] = std::get<3>(observed[i]) + noise_y;  // y with noise
-      ptr[2] = 0.0;                             // z (fixed)
+
+      double dx = observed[i].first.x - robot_x_;
+      double dy = observed[i].first.y - robot_y_;
+
+      double c = std::cos(robot_theta_gt_);
+      double s = std::sin(robot_theta_gt_);
+
+      double xr =  c * dx + s * dy;
+      double yr = -s * dx + c * dy;
+
+      xr += noise_x;
+      yr += noise_y;
+
+      float *ptr = (float *)&pc->data[i * pc->point_step];
+      ptr[0] = xr;
+      ptr[1] = yr;
+      ptr[2] = 0.0f;
       
       int32_t* id_ptr = (int32_t*)&pc->data[i * pc->point_step + 12];
-      *id_ptr = std::get<0>(observed[i]).id;  // id
+      *id_ptr = observed[i].first.id;  // id
     }
     
     observed_landmarks_publisher_->publish(std::move(pc));
