@@ -12,6 +12,8 @@ class OdomConvergencePlot(Node):
     def __init__(self):
         super().__init__('odom_convergence_plot')
 
+        self.T_END = 30.0   # seconds
+
         self.create_subscription(Odometry, '/robot_estimated_odometry', self.odom_cb, 10)
         self.create_subscription(Odometry, '/robot_gt', self.gt_cb, 10)
 
@@ -32,6 +34,24 @@ class OdomConvergencePlot(Node):
 
         self.timer = self.create_timer(0.1, self.update_plot)
 
+        self.RMSE_THRESH = 0.25   # meters
+        self.STABLE_TIME = 5.0    # seconds
+
+        self.stable_duration = 0.0
+        self.stable = False
+        self.t_stable = None
+        self.last_time = None
+        
+        self.STAB_THRESHOLD = 0.25      # meters
+        self.STAB_DURATION = 5.0        # seconds
+        self.is_stable = False
+        self.stable_start_time = None
+        self.t_stab = None
+
+        self.tracking_rmse_buf = []     # RMSE after stabilization
+        self.tracking_line = None
+
+
         # matplotlib
         plt.ion() # enables interactive mode
 
@@ -43,6 +63,15 @@ class OdomConvergencePlot(Node):
         self.ax_pos.set_ylabel("RMSE [m]")
         self.ax_pos.legend()
         self.ax_pos.grid(True)
+
+        self.ax_pos.axhline(
+        self.RMSE_THRESH,
+        color='red',
+        linestyle=':',
+        label='RMSE threshold'
+        )
+        self.ax_pos.legend()
+
 
         # Yaw RMSE plot
         self.fig_yaw, self.ax_yaw = plt.subplots()
@@ -115,6 +144,60 @@ class OdomConvergencePlot(Node):
         self.yaw_err.append(yaw_err)
         self.time.append(t)
 
+        # compute dt
+        if self.last_time is None:
+            dt = 0.0
+        else:
+            dt = t - self.last_time
+        self.last_time = t
+
+        if not self.stable:
+            if pos_err < self.RMSE_THRESH:
+                self.stable_duration += dt
+                if self.stable_duration >= self.STABLE_TIME:
+                    self.stable = True
+                    self.t_stable = t
+                    self.get_logger().info(
+                        f"Odometry stabilized at t = {t:.2f} s (RMSE < {self.RMSE_THRESH})\n"
+                        f"Current RMSE is {pos_err} m"
+                    )
+            else:
+                self.stable_duration = 0.0
+
+        if self.stable and not hasattr(self, '_annotated'):
+            self.ax_pos.axvline(
+                self.t_stable,
+                color='green',
+                linestyle='--',
+                label='Stable'
+            )
+            self.ax_pos.legend()
+            self._annotated = True
+
+        if self.stable:
+            self.tracking_rmse_buf.append(pos_err)
+
+        if self.stable and len(self.tracking_rmse_buf) > 0:
+            tracking_rmse = np.mean(self.tracking_rmse_buf)
+
+            if self.tracking_line is None:
+                self.tracking_line = self.ax_pos.axhline(
+                    tracking_rmse,
+                    linestyle=':',
+                    color='red',
+                    label='Tracking RMSE (mean)'
+                )
+                self.ax_pos.legend()
+            else:
+                self.tracking_line.set_ydata([tracking_rmse, tracking_rmse])
+
+        if self.stable and len(self.tracking_rmse_buf) % 50 == 0:
+            self.get_logger().info(
+                f"Current tracking RMSE (mean) = {tracking_rmse:.3f} m"
+            )
+
+
+
         # Position plot update
         self.l_pos.set_data(self.time, self.pos_err)
         self.ax_pos.relim()
@@ -128,6 +211,20 @@ class OdomConvergencePlot(Node):
         self.ax_yaw.autoscale_view()
         self.fig_yaw.canvas.draw()
         self.fig_yaw.canvas.flush_events()
+
+        if t >= self.T_END:
+            if self.stable and len(self.tracking_rmse_buf) > 0:
+                final_tracking_rmse = np.mean(self.tracking_rmse_buf)
+                self.get_logger().info(
+                    f"Final tracking RMSE = {final_tracking_rmse:.3f} m"
+                )
+
+            self.get_logger().info("Simulation finished.")
+            rclpy.shutdown()
+
+
+        
+
 
 
 
