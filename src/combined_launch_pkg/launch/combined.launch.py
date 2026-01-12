@@ -26,6 +26,11 @@ def generate_launch_description():
             )
         ])
     )
+    delayed_nodes = TimerAction(
+        period=1.0,  # delay in seconds
+        actions=[positioning_launch, fake_robot_launch],
+    )
+
     odom_plot_node = Node(
     package='combined_launch_pkg',
     executable='liveplot',
@@ -56,8 +61,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         odom_plot_node,
-        fake_robot_launch,
-        positioning_launch
+        delayed_nodes
         # rosbag_record,
         # stop_launch_timer
     ])

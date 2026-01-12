@@ -231,8 +231,6 @@ void UKF::predict(double dt, double dx, double dy, double dtheta) {
     x_[2] = normalizeAngle(x_[2]);  // ensure state angle is clean
     P_ = P_pred;
 
-    std::cout << "Prediction step done." << std::endl;
-
 
 }
 

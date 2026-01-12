@@ -24,8 +24,11 @@ setup(
             'pytest',
         ],
     },
+ 
     entry_points={
-        'console_scripts': [
-        ],
-    },
+    'console_scripts': [
+        'liveplot = combined_launch_pkg.liveplot:main',
+    ],
+},
+
 )

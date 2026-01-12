@@ -29,7 +29,7 @@ public:
      * @brief Update step with landmark observations
      * @param landmark_observations Vector of {id, x, y, noise_cov}
      */
-    void update(const std::vector<std::tuple<int, double, double, double>>& landmark_observations);
+    void update(const std::vector<std::tuple<int, double, double>>& landmark_observations);
     
     /**
      * @brief Set landmark positions
