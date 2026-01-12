@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cmath>
 #include <iostream>
+#include <Eigen/Dense>
 
 /**
  * STUDENT ASSIGNMENT: Landmark Manager Implementation
@@ -166,4 +167,25 @@ double LandmarkManager::distance(double x1, double y1, double x2, double y2) {
     double dx = x2 - x1;
     double dy = y2 - y1;
     return std::sqrt(dx * dx + dy * dy);
+}
+
+Eigen::Vector2d LandmarkManager::measurementModel(const std::vector<double>& state, int landmark_id) const
+{
+    if (!hasLandmark(landmark_id)) {
+        return Eigen::Vector2d::Zero();
+    }
+
+    auto [lx, ly] = getLandmark(landmark_id);
+
+    Eigen::Vector2d rel_pos(lx - state[0], ly - state[1]);
+    double theta = state[2];
+
+    Eigen::Matrix2d R;
+    R << std::cos(theta), -std::sin(theta),
+         std::sin(theta),  std::cos(theta);
+
+    // Transform landmark position into robot frame
+    Eigen::Vector2d measurement = R.transpose() * rel_pos;
+
+    return measurement;
 }

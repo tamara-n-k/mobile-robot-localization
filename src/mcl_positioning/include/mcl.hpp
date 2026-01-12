@@ -2,6 +2,9 @@
 
 #include <vector>
 #include <random>
+#include <Eigen/Dense>
+#include <cmath>
+#include "landmark_manager.hpp"
 
 class MCL
 {
@@ -17,6 +20,15 @@ public:
         double y_min, double y_max);
 
     const std::vector<Particle>& particles() const;
+    
+    struct LandmarkMeasurement {
+    int landmark_id;
+    double range;  // observed distance to the landmark
+    };
+
+
+    void updateWeights(const std::vector<double>& laser_ranges,
+                        const std::vector<double>& laser_angles);
 
 private:
     int N_;
@@ -27,9 +39,28 @@ private:
     double y_min_, y_max_;
 
     // random number generation
-    std::random_device rd_;
-    std::mt19937 gen_;
+    std::random_device rd_;// produces a seed
+    std::mt19937 gen_; // is initialized with that seed
+
+    std::vector<std::vector<int>> map_;
+    double map_resolution_;
+    double map_origin_x_, map_origin_y_;
 
     void initParticles();
 
+    void motionUpdate(double dx, double dy, double dtheta);
+    double normalizeAngle(double angle);
+    
+    LandmarkManager landmark_manager_;
+    void measurementUpdate(const std::vector<double>& laser_ranges,
+                        const std::vector<double>& laser_angles);
+
+    double sensorModel(const Particle& p,
+                       const std::vector<double>& laser_ranges,
+                       const std::vector<double>& laser_angles);
+
+    double computeExpectedRange(const std::vector<double>& state, double beam_angle);
+
+    void normalizeWeights();
+    void lowVarianceResample();
 };
