@@ -109,7 +109,7 @@ void MCL::resample()
     particles_ = std::move(new_particles);
 }      
         
-        
+
 //helpers
 double MCL::normalizeAngle(double angle)
 {
