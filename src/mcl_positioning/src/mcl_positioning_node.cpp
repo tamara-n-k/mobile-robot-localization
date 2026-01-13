@@ -7,8 +7,8 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 
-#include "mcl.hpp"
-#include "landmark_manager.hpp"
+#include "mcl_positioning/mcl.hpp"
+#include "mcl_positioning/landmark_manager.hpp"
 
 #include <memory>
 #include <cmath>
