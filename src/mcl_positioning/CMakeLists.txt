@@ -18,13 +18,13 @@ find_package(tf2_geometry_msgs REQUIRED)
 include_directories(include)
 
 # Main node executable
-add_executable(positioning_node
+add_executable(mcl_positioning_node
   src/mcl_positioning_node.cpp
   src/mcl.cpp
   src/landmark_manager.cpp
 )
 
-target_link_libraries(positioning_node
+target_link_libraries(mcl_positioning_node
   ${rclcpp_LIBRARIES}
   ${nav_msgs_LIBRARIES}
   ${sensor_msgs_LIBRARIES}
@@ -33,7 +33,7 @@ target_link_libraries(positioning_node
   ${tf2_geometry_msgs_LIBRARIES}
 )
 
-ament_target_dependencies(positioning_node
+ament_target_dependencies(mcl_positioning_node
   rclcpp
   nav_msgs
   sensor_msgs
@@ -44,7 +44,7 @@ ament_target_dependencies(positioning_node
 
 # Install targets
 install(TARGETS
-  positioning_node
+  mcl_positioning_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

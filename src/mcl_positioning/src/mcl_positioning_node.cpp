@@ -59,8 +59,8 @@ public:
         
         RCLCPP_INFO(this->get_logger(), "MCL Positioning Node initialized with %d particles", num_particles);
 
-        particle_cloud_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
-            "/mcl_particle_cloud", rclcpp::QoS(10));
+        // particle_cloud_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
+        //     "/mcl_particle_cloud", rclcpp::QoS(10));
     }
 
 private:
@@ -98,34 +98,40 @@ private:
     }
     
     void landmarksObservedCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-        std::vector<LandmarkMeasurement> measurements;
+        std::vector<std::tuple<int, double, double>> observations;//id, x, y, noise
         
         try {
             sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
             sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
             sensor_msgs::PointCloud2ConstIterator<uint32_t> iter_id(*msg, "id");
-
+            
+            int count = 0;
             for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_id) {
-                LandmarkMeasurement lm;
-                lm.landmark_id = static_cast<int>(*iter_id);
+                int landmark_id = static_cast<int>(*iter_id);
+                float obs_x = static_cast<float>(*iter_x);
+                float obs_y = static_cast<float>(*iter_y);
+                observations.push_back(std::make_tuple(landmark_id, obs_x, obs_y));//constant not used
 
-                // Calculate observed range (Euclidean distance from robot to landmark)
-                lm.range = std::sqrt(pow(*iter_x, 2) + pow(*iter_y, 2));
-                measurements.push_back(lm);
+                RCLCPP_DEBUG(this->get_logger(),
+                    "Landmark %d observed at (%.3f, %.3f)",
+                    landmark_id, obs_x, obs_y);
+                
+                count++;
             }
+            
+            RCLCPP_DEBUG(this->get_logger(), 
+                "Processed %d landmark observations", count);
         } catch (const std::exception& e) {
-            RCLCPP_WARN(this->get_logger(), "Measurement error: %s", e.what());
+            RCLCPP_WARN(this->get_logger(), 
+                "Failed to parse landmark observations: %s", e.what());
         }
 
-        if (!measurements.empty()) {
-            // Task A3: Update weights and Normalize
-            for (auto &p : mcl_->getParticles()) {
-                p.weight *= mcl_->sensorModel(p, measurements);
-            }
+        if (!observations.empty()) {
+
             mcl_->normalizeWeights();
             mcl_->resample(); 
         }
-        publishParticleCloud(msg->header.stamp);
+        // publishParticleCloud(msg->header.stamp);
         publishEstimatedOdometry(msg->header.stamp);
     }
 
@@ -158,27 +164,27 @@ private:
         estimated_odom_pub_->publish(odom_msg);
     }
 
-    void publishParticleCloud(const rclcpp::Time& timestamp) {
-    geometry_msgs::msg::PoseArray cloud_msg;
-    cloud_msg.header.stamp = timestamp;
-    cloud_msg.header.frame_id = "map"; // Particles exist in map coordinates
+    // void publishParticleCloud(const rclcpp::Time& timestamp) {
+    // geometry_msgs::msg::PoseArray cloud_msg;
+    // cloud_msg.header.stamp = timestamp;
+    // cloud_msg.header.frame_id = "map"; // Particles exist in map coordinates
 
-    for (const auto& p : mcl_->getParticles()) {
-        geometry_msgs::msg::Pose pose;
-        pose.position.x = p.state[0];
-        pose.position.y = p.state[1];
-        pose.position.z = 0.0; // 2D robot
+    // for (const auto& p : mcl_->getParticles()) {
+    //     geometry_msgs::msg::Pose pose;
+    //     pose.position.x = p.state[0];
+    //     pose.position.y = p.state[1];
+    //     pose.position.z = 0.0; // 2D robot
 
-        // Convert particle theta to quaternion
-        tf2::Quaternion q;
-        q.setRPY(0, 0, p.state[2]);
-        pose.orientation = tf2::toMsg(q);
+    //     // Convert particle theta to quaternion
+    //     tf2::Quaternion q;
+    //     q.setRPY(0, 0, p.state[2]);
+    //     pose.orientation = tf2::toMsg(q);
 
-        cloud_msg.poses.push_back(pose);
-    }
+    //     cloud_msg.poses.push_back(pose);
+    // }
 
-    particle_cloud_pub_->publish(cloud_msg);
-    }
+    // particle_cloud_pub_->publish(cloud_msg);
+    // }
 
     // Helpers
     double quaternionToYaw(const geometry_msgs::msg::Quaternion& q) {

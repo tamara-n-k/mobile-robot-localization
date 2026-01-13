@@ -1,5 +1,5 @@
 #pragma once
-
+#include <iostream>
 #include <vector>
 #include <random>
 #include <Eigen/Dense>
@@ -19,19 +19,24 @@ public:
         double x_min, double x_max,
         double y_min, double y_max);
 
-    const std::vector<Particle>& particles() const;
-    
+    // Getter für particles
+    const std::vector<Particle>& getParticles() const;
+
     struct LandmarkMeasurement {
-    int landmark_id;
-    double range;  // observed distance to the landmark
+        int landmark_id;
+        double range;  // observed distance to the landmark
     };
 
-
     void updateWeights(const std::vector<double>& laser_ranges,
-                        const std::vector<double>& laser_angles);
+                       const std::vector<double>& laser_angles);
+
+    void motionModel(double dx, double dy, double dtheta);
+    void normalizeWeights();
+    void resample();
 
 private:
     int N_;
+
     std::vector<Particle> particles_;
 
     // map bounds
@@ -48,12 +53,11 @@ private:
 
     void initParticles();
 
-    void motionUpdate(double dx, double dy, double dtheta);
     double normalizeAngle(double angle);
-    
+
     LandmarkManager landmark_manager_;
     void measurementUpdate(const std::vector<double>& laser_ranges,
-                        const std::vector<double>& laser_angles);
+                           const std::vector<double>& laser_angles);
 
     double sensorModel(const Particle& p,
                        const std::vector<double>& laser_ranges,
@@ -61,6 +65,5 @@ private:
 
     double computeExpectedRange(const std::vector<double>& state, double beam_angle);
 
-    void normalizeWeights();
     void lowVarianceResample();
 };

@@ -15,6 +15,9 @@ MCL::MCL(int num_particles,
 }
 
 }
+const std::vector<MCL::Particle>& MCL::getParticles() const {
+    return particles_;
+}
 
 // A1. particle init
 void MCL::initParticles()
@@ -54,32 +57,32 @@ void MCL::motionModel(double dx, double dy, double dtheta)
         }
     }
 
-//A3. compute likelihood of each particle using laser scan data and map
-double MCL::sensorModel(const Particle& p,
-                        const std::vector<LandmarkMeasurement>& measurements)
-{
-    double q = 1.0;
-    const double sigma_range = 0.2; // example noise stddev in meters
+// //A3. compute likelihood of each particle using laser scan data and map
+// double MCL::sensorModel(const Particle& p,
+//                         const std::vector<LandmarkMeasurement>& measurements)
+// {
+//     double q = 1.0;
+//     const double sigma_range = 0.2; // example noise stddev in meters
 
-    for (const auto& meas : measurements)
-    {
-        // Expected measurement vector (relative landmark position in sensor frame)
-        Eigen::Vector2d expected_meas = landmark_manager_.measurementModel(p.state, meas.landmark_id);
+//     for (const auto& meas : measurements)
+//     {
+//         // Expected measurement vector (relative landmark position in sensor frame)
+//         Eigen::Vector2d expected_meas = landmark_manager_.measurementModel(p.state, meas.landmark_id);
 
-        // Extract expected range (distance)
-        double expected_range = expected_meas.norm();
+//         // Extract expected range (distance)
+//         double expected_range = expected_meas.norm();
 
-        // Actual measured range from CSV
-        double observed_range = meas.range;
+//         // Actual measured range from CSV
+//         double observed_range = meas.range;
 
-        // Gaussian likelihood on range difference
-        double diff = observed_range - expected_range;
-        double prob = (1.0 / (sigma_range * sqrt(2 * M_PI))) * std::exp(-0.5 * diff * diff / (sigma_range * sigma_range));
+//         // Gaussian likelihood on range difference
+//         double diff = observed_range - expected_range;
+//         double prob = (1.0 / (sigma_range * sqrt(2 * M_PI))) * std::exp(-0.5 * diff * diff / (sigma_range * sigma_range));
 
-        q *= prob;
-    }
-    return q;
-}
+//         q *= prob;
+//     }
+//     return q;
+// }
 
 //A4. resampling
 void MCL::resample()
