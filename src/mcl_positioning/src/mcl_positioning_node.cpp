@@ -20,7 +20,7 @@ public:
         RCLCPP_INFO(this->get_logger(), "Initializing MCL Positioning Node");
     
         this->declare_parameter<std::string>("landmarks_csv_path", "");
-        this->declare_parameter<int>("num_particles", 100); // Increased default for MCL
+        this->declare_parameter<int>("num_particles", 500); // Increased default for MCL
         this->declare_parameter<double>("x_min", -10.0);
         this->declare_parameter<double>("y_min", -10.0);    
         this->declare_parameter<double>("x_max", 10.0);
@@ -56,18 +56,19 @@ public:
         estimated_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/robot_estimated_odometry_mcl", rclcpp::QoS(10)
         );
-        
+
         RCLCPP_INFO(this->get_logger(), "MCL Positioning Node initialized with %d particles", num_particles);
 
-        // particle_cloud_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
-        //     "/mcl_particle_cloud", rclcpp::QoS(10));
+        particle_cloud_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
+            "/mcl_particle_cloud", rclcpp::QoS(10));
     }
 
 private:
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr landmarks_obs_sub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr estimated_odom_pub_;
-    
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr particle_cloud_pub_;
+
     std::unique_ptr<MCL> mcl_;
     LandmarkManager landmarksManager_;
 
@@ -91,7 +92,9 @@ private:
         double dtheta = normalizeAngle(theta - last_theta_);
 
         // Update Particles
-        mcl_->motionModel(dx, dy, dtheta);
+        mcl_->motionUpdate(dx, dy, dtheta);
+        std::cout << " motion update" << std::endl;
+
 
         last_x_ = x; last_y_ = y; last_theta_ = theta;
         last_time_ = msg->header.stamp;
@@ -127,11 +130,14 @@ private:
         }
 
         if (!observations.empty()) {
+            mcl_->measurementUpdate(observations);
+            std::cout << " measurement update" << std::endl;
 
-            mcl_->normalizeWeights();
             mcl_->resample(); 
+            std::cout << " resampling" << std::endl;
+
         }
-        // publishParticleCloud(msg->header.stamp);
+        publishParticleCloud(msg->header.stamp);
         publishEstimatedOdometry(msg->header.stamp);
     }
 
@@ -164,27 +170,27 @@ private:
         estimated_odom_pub_->publish(odom_msg);
     }
 
-    // void publishParticleCloud(const rclcpp::Time& timestamp) {
-    // geometry_msgs::msg::PoseArray cloud_msg;
-    // cloud_msg.header.stamp = timestamp;
-    // cloud_msg.header.frame_id = "map"; // Particles exist in map coordinates
+    void publishParticleCloud(const rclcpp::Time& timestamp) {
+    geometry_msgs::msg::PoseArray cloud_msg;
+    cloud_msg.header.stamp = timestamp;
+    cloud_msg.header.frame_id = "map"; // Particles exist in map coordinates
 
-    // for (const auto& p : mcl_->getParticles()) {
-    //     geometry_msgs::msg::Pose pose;
-    //     pose.position.x = p.state[0];
-    //     pose.position.y = p.state[1];
-    //     pose.position.z = 0.0; // 2D robot
+    for (const auto& p : mcl_->getParticles()) {
+        geometry_msgs::msg::Pose pose;
+        pose.position.x = p.state[0];
+        pose.position.y = p.state[1];
+        pose.position.z = 0.0; // 2D robot
 
-    //     // Convert particle theta to quaternion
-    //     tf2::Quaternion q;
-    //     q.setRPY(0, 0, p.state[2]);
-    //     pose.orientation = tf2::toMsg(q);
+        // Convert particle theta to quaternion
+        tf2::Quaternion q;
+        q.setRPY(0, 0, p.state[2]);
+        pose.orientation = tf2::toMsg(q);
 
-    //     cloud_msg.poses.push_back(pose);
-    // }
+        cloud_msg.poses.push_back(pose);
+    }
 
-    // particle_cloud_pub_->publish(cloud_msg);
-    // }
+    particle_cloud_pub_->publish(cloud_msg);
+    }
 
     // Helpers
     double quaternionToYaw(const geometry_msgs::msg::Quaternion& q) {

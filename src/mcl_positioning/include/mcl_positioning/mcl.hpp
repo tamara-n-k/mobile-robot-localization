@@ -5,13 +5,14 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include "landmark_manager.hpp"
+#include "rclcpp/rclcpp.hpp"
 
 class MCL
 {
 public:
     struct Particle
     {
-        std::vector<double> state;  // [x, y, theta]
+        std::vector<double> state;  // [x, y, theta] position of the robot in global frame
         double weight;
     };
 
@@ -27,10 +28,8 @@ public:
         double range;  // observed distance to the landmark
     };
 
-    void updateWeights(const std::vector<double>& laser_ranges,
-                       const std::vector<double>& laser_angles);
-
-    void motionModel(double dx, double dy, double dtheta);
+    void measurementUpdate(const std::vector<std::tuple<int, double, double>>& observations);
+    void motionUpdate(double dx, double dy, double dtheta);
     void normalizeWeights();
     void resample();
 
@@ -56,14 +55,5 @@ private:
     double normalizeAngle(double angle);
 
     LandmarkManager landmark_manager_;
-    void measurementUpdate(const std::vector<double>& laser_ranges,
-                           const std::vector<double>& laser_angles);
 
-    double sensorModel(const Particle& p,
-                       const std::vector<double>& laser_ranges,
-                       const std::vector<double>& laser_angles);
-
-    double computeExpectedRange(const std::vector<double>& state, double beam_angle);
-
-    void lowVarianceResample();
 };
