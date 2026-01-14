@@ -3,17 +3,15 @@
 // constructor
 MCL::MCL(int num_particles,
          double x_min, double x_max,
-         double y_min, double y_max)
+         double y_min, double y_max,
+         const LandmarkManager& landmark_manager)
     : N_(num_particles),
       x_min_(x_min), x_max_(x_max),
       y_min_(y_min), y_max_(y_max),
-      gen_(rd_())//random number engine
+      landmark_manager_(landmark_manager),
+      gen_(rd_())
 {
     initParticles();
-    if (!landmark_manager_.loadFromCSV("path_to_landmarks.csv")) {
-    std::cerr << "Failed to load landmarks\n";
-}
-
 }
 const std::vector<MCL::Particle>& MCL::getParticles() const {
     return particles_;
@@ -65,34 +63,39 @@ void MCL::measurementUpdate(const std::vector<std::tuple<int, double, double>>& 
 
     for (auto& p : particles_) {
         double weight = 1.0;
-        
-        // particle orientation
+
         double cos_th = std::cos(p.state[2]);
         double sin_th = std::sin(p.state[2]);
 
         for (const auto& obs : observations) {
             int lm_id = std::get<0>(obs);
-            double obs_y_local = std::get<2>(obs); 
-            double obs_x_local = std::get<1>(obs); 
-            
+            double obs_robot_x = std::get<1>(obs);
+            double obs_robot_y = std::get<2>(obs);
+
+            //get the landmark positions in global frame
             auto lm_pos = landmark_manager_.getLandmark(lm_id);
             double lm_x_global = lm_pos.first;
             double lm_y_global = lm_pos.second;
 
-            //obs converted to global frame
-            double predicted_lm_x = p.state[0] + (obs_x_local * cos_th - obs_y_local * sin_th);
-            double predicted_lm_y = p.state[1] + (obs_x_local * sin_th + obs_y_local * cos_th);
+            //subtract landmark positions from particle positions
+            double dx = lm_x_global - p.state[0];
+            double dy = lm_y_global - p.state[1];
+            //convert observations into robot frame
+            double predicted_obs_x =  cos_th * dx + sin_th * dy;
+            double predicted_obs_y = -sin_th * dx + cos_th * dy;
 
-            double dx = lm_x_global - predicted_lm_x;
-            double dy = lm_y_global - predicted_lm_y;
-            double sq_dist = dx*dx + dy*dy;
+            double ex = obs_robot_x - predicted_obs_x;
+            double ey = obs_robot_y - predicted_obs_y;
+            double sq_dist = ex * ex + ey * ey;
 
-            // gaussian likelihood model
+            //Gaussian likelihood model
             double prob = normalizer * std::exp(-0.5 * sq_dist / (sigma_range * sigma_range));
-            weight *= (prob + 1e-9); 
+            weight *= (prob + 1e-9);
         }
+
         p.weight = weight;
     }
+
     normalizeWeights(); 
 }
 

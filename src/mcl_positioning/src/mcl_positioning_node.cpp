@@ -38,7 +38,7 @@ public:
             RCLCPP_ERROR(this->get_logger(), "Failed to load CSV: %s", csv_path.c_str());
         }
 
-        mcl_ = std::make_unique<MCL>(num_particles, x_min, x_max, y_min, y_max);
+        mcl_ = std::make_unique<MCL>(num_particles, x_min, x_max, y_min, y_max, landmarksManager_);
 
         // Create subscribers
         odometry_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -93,7 +93,7 @@ private:
 
         // Update Particles
         mcl_->motionUpdate(dx, dy, dtheta);
-        std::cout << " motion update" << std::endl;
+        // std::cout << " motion update" << std::endl;
 
 
         last_x_ = x; last_y_ = y; last_theta_ = theta;
@@ -131,12 +131,14 @@ private:
 
         if (!observations.empty()) {
             mcl_->measurementUpdate(observations);
-            std::cout << " measurement update" << std::endl;
+            // std::cout << " measurement update" << std::endl;
 
             mcl_->resample(); 
-            std::cout << " resampling" << std::endl;
+            // std::cout << " resampling" << std::endl;
 
         }
+        // RCLCPP_INFO(this->get_logger(), "Landmarks observed in frame: %s", msg->header.frame_id.c_str());
+
         publishParticleCloud(msg->header.stamp);
         publishEstimatedOdometry(msg->header.stamp);
     }
@@ -155,6 +157,10 @@ private:
             sum_sin += std::sin(p.state[2]) * p.weight;
             sum_cos += std::cos(p.state[2]) * p.weight;
             total_weight += p.weight;
+        }
+        if (total_weight < 1e-12) {
+            RCLCPP_WARN(this->get_logger(), "Total particle weight too small, skipping publish");
+            return;
         }
 
         nav_msgs::msg::Odometry odom_msg;

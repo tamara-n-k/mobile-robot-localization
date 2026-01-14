@@ -18,7 +18,8 @@ public:
 
     MCL(int num_particles,
         double x_min, double x_max,
-        double y_min, double y_max);
+        double y_min, double y_max,
+        const LandmarkManager& landmark_manager);
 
     // Getter für particles
     const std::vector<Particle>& getParticles() const;
@@ -41,6 +42,8 @@ private:
     // map bounds
     double x_min_, x_max_;
     double y_min_, y_max_;
+    
+    const LandmarkManager& landmark_manager_;
 
     // random number generation
     std::random_device rd_;// produces a seed
@@ -54,6 +57,5 @@ private:
 
     double normalizeAngle(double angle);
 
-    LandmarkManager landmark_manager_;
 
 };

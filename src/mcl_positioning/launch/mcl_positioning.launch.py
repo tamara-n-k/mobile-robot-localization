@@ -91,7 +91,7 @@ def generate_launch_description():
     
     # Info message about the launch
     log_info = LogInfo(
-        msg=['Starting Kalman Positioning Node with parameters:',
+        msg=['Starting MCL Positioning Node with parameters:',
              ' - Landmarks CSV: ', LaunchConfiguration('landmarks_csv_path'),
              ' - Num Particles: ', LaunchConfiguration('num_particles')
             ]
