@@ -41,12 +41,12 @@ void MCL::initParticles()
 }
 
 //A2. apply odometry based motion model to each particle
-void MCL::motionModel(double dx, double dy, double dtheta)
+void MCL::motionUpdate(double dx, double dy, double dtheta)
 {
     // Gaussian noise
-    std::normal_distribution<double> noise_xy(0.0, 0.02);
+    std::normal_distribution<double> noise_xy(0.0, 0.01);
     std::normal_distribution<double> noise_theta(0.0, 0.01);
-
+    
     for (auto &p : particles_)//for every particle, update motion
         {
             // odometry + noise (draw 1 unique random sample from gaussian distr. using gen_)
@@ -57,32 +57,44 @@ void MCL::motionModel(double dx, double dy, double dtheta)
         }
     }
 
-// //A3. compute likelihood of each particle using laser scan data and map
-// double MCL::sensorModel(const Particle& p,
-//                         const std::vector<LandmarkMeasurement>& measurements)
-// {
-//     double q = 1.0;
-//     const double sigma_range = 0.2; // example noise stddev in meters
+void MCL::measurementUpdate(const std::vector<std::tuple<int, double, double>>& observations) {
+    if (observations.empty()) return;
 
-//     for (const auto& meas : measurements)
-//     {
-//         // Expected measurement vector (relative landmark position in sensor frame)
-//         Eigen::Vector2d expected_meas = landmark_manager_.measurementModel(p.state, meas.landmark_id);
+    const double sigma_range = 0.2;
+    const double normalizer = 1.0 / (sigma_range * std::sqrt(2.0 * M_PI));
 
-//         // Extract expected range (distance)
-//         double expected_range = expected_meas.norm();
+    for (auto& p : particles_) {
+        double weight = 1.0;
+        
+        // particle orientation
+        double cos_th = std::cos(p.state[2]);
+        double sin_th = std::sin(p.state[2]);
 
-//         // Actual measured range from CSV
-//         double observed_range = meas.range;
+        for (const auto& obs : observations) {
+            int lm_id = std::get<0>(obs);
+            double obs_y_local = std::get<2>(obs); 
+            double obs_x_local = std::get<1>(obs); 
+            
+            auto lm_pos = landmark_manager_.getLandmark(lm_id);
+            double lm_x_global = lm_pos.first;
+            double lm_y_global = lm_pos.second;
 
-//         // Gaussian likelihood on range difference
-//         double diff = observed_range - expected_range;
-//         double prob = (1.0 / (sigma_range * sqrt(2 * M_PI))) * std::exp(-0.5 * diff * diff / (sigma_range * sigma_range));
+            //obs converted to global frame
+            double predicted_lm_x = p.state[0] + (obs_x_local * cos_th - obs_y_local * sin_th);
+            double predicted_lm_y = p.state[1] + (obs_x_local * sin_th + obs_y_local * cos_th);
 
-//         q *= prob;
-//     }
-//     return q;
-// }
+            double dx = lm_x_global - predicted_lm_x;
+            double dy = lm_y_global - predicted_lm_y;
+            double sq_dist = dx*dx + dy*dy;
+
+            // gaussian likelihood model
+            double prob = normalizer * std::exp(-0.5 * sq_dist / (sigma_range * sigma_range));
+            weight *= (prob + 1e-9); 
+        }
+        p.weight = weight;
+    }
+    normalizeWeights(); 
+}
 
 //A4. resampling
 void MCL::resample()
@@ -90,7 +102,6 @@ void MCL::resample()
     std::vector<Particle> new_particles;
     new_particles.reserve(N_);
 
-    // Low Variance Sampler algorithm
     std::uniform_real_distribution<double> dist_start(0.0, 1.0 / N_);
     double r = dist_start(gen_);
     double c = particles_[0].weight;
@@ -134,7 +145,6 @@ void MCL::normalizeWeights()
 
     if (sum_weights < 1e-12)//too small 
     {   
-        // std::cout << " Sum of weights is too small." << std::endl;
         double uniform_weight = 1.0 / static_cast<double>(N_);
         for (auto& p : particles_)
         {
