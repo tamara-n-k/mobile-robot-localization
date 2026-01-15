@@ -39,11 +39,11 @@ void MCL::initParticles()
 }
 
 //A2. apply odometry based motion model to each particle
-void MCL::motionUpdate(double dx, double dy, double dtheta)
+void MCL::motionUpdate(double dx, double dy, double dtheta, double dev_xy, double dev_theta)
 {
     // Gaussian noise
-    std::normal_distribution<double> noise_xy(0.0, 0.01);
-    std::normal_distribution<double> noise_theta(0.0, 0.01);
+    std::normal_distribution<double> noise_xy(0.0, dev_xy);
+    std::normal_distribution<double> noise_theta(0.0, dev_theta);
     
     for (auto &p : particles_)//for every particle, update motion
         {

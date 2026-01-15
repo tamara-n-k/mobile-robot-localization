@@ -30,7 +30,7 @@ public:
     };
 
     void measurementUpdate(const std::vector<std::tuple<int, double, double>>& observations);
-    void motionUpdate(double dx, double dy, double dtheta);
+    void motionUpdate(double dx, double dy, double dtheta, double dev_xy, double dev_theta);
     void normalizeWeights();
     void resample();
 

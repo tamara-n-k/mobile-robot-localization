@@ -20,18 +20,24 @@ public:
         RCLCPP_INFO(this->get_logger(), "Initializing MCL Positioning Node");
     
         this->declare_parameter<std::string>("landmarks_csv_path", "");
-        this->declare_parameter<int>("num_particles", 500); // Increased default for MCL
-        this->declare_parameter<double>("x_min", -10.0);
-        this->declare_parameter<double>("y_min", -10.0);    
-        this->declare_parameter<double>("x_max", 10.0);
-        this->declare_parameter<double>("y_max", 10.0);
+        this->declare_parameter<int>("num_particles", 500);
+        // this->declare_parameter<double>("x_min", -10.0);
+        // this->declare_parameter<double>("y_min", -10.0);    
+        // this->declare_parameter<double>("x_max", 10.0);
+        // this->declare_parameter<double>("y_max", 10.0);
+        this->declare_parameter<double>("dev_xy", 0.01);
+        this->declare_parameter<double>("dev_theta", 0.01);
+
+        dev_xy_ = this->get_parameter("dev_xy").as_double();
+        dev_theta_ = this->get_parameter("dev_theta").as_double();
 
         std::string csv_path = this->get_parameter("landmarks_csv_path").as_string();
         int num_particles = this->get_parameter("num_particles").as_int();
-        double x_min = this->get_parameter("x_min").as_double();
-        double x_max = this->get_parameter("x_max").as_double();
-        double y_min = this->get_parameter("y_min").as_double();
-        double y_max = this->get_parameter("y_max").as_double();
+       
+        double x_min = -10.0;
+        double x_max = 10.0;
+        double y_min = -10.0;
+        double y_max = 10.0;
 
         // Initialize Landmark Manager and Load CSV
         if (!landmarksManager_.loadFromCSV(csv_path)) {
@@ -74,6 +80,8 @@ private:
 
     rclcpp::Time last_time_;
     double last_x_ = 0.0, last_y_ = 0.0, last_theta_ = 0.0;
+    double dev_xy_;
+    double dev_theta_;
 
     void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
         double x = msg->pose.pose.position.x;
@@ -92,7 +100,7 @@ private:
         double dtheta = normalizeAngle(theta - last_theta_);
 
         // Update Particles
-        mcl_->motionUpdate(dx, dy, dtheta);
+        mcl_->motionUpdate(dx, dy, dtheta, dev_xy_, dev_theta_);
         // std::cout << " motion update" << std::endl;
 
 
@@ -131,7 +139,7 @@ private:
 
         if (!observations.empty()) {
             mcl_->measurementUpdate(observations);
-            // std::cout << " measurement update" << std::endl;
+            std::cout << " measurement update" << std::endl;
 
             mcl_->resample(); 
             // std::cout << " resampling" << std::endl;
