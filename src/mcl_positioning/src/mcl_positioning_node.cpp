@@ -62,11 +62,14 @@ public:
         estimated_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/robot_estimated_odometry_mcl", rclcpp::QoS(10)
         );
+        particle_cloud_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
+                    "/mcl_particle_cloud", rclcpp::QoS(10));
+
+        last_time_ = rclcpp::Time();
 
         RCLCPP_INFO(this->get_logger(), "MCL Positioning Node initialized with %d particles", num_particles);
 
-        particle_cloud_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
-            "/mcl_particle_cloud", rclcpp::QoS(10));
+        
     }
 
 private:
@@ -84,6 +87,7 @@ private:
     double dev_theta_;
 
     void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+        //odometry msg in global frame
         double x = msg->pose.pose.position.x;
         double y = msg->pose.pose.position.y;
         double theta = quaternionToYaw(msg->pose.pose.orientation);
@@ -106,11 +110,14 @@ private:
 
         last_x_ = x; last_y_ = y; last_theta_ = theta;
         last_time_ = msg->header.stamp;
+        // RCLCPP_INFO(this->get_logger(), "%s", msg->header.frame_id.c_str());
+
     }
     
     void landmarksObservedCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-        std::vector<std::tuple<int, double, double>> observations;//id, x, y, noise
         
+        std::vector<std::tuple<int, double, double>> observations;//id, x, y, noise
+
         try {
             sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
             sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
@@ -139,12 +146,16 @@ private:
 
         if (!observations.empty()) {
             mcl_->measurementUpdate(observations);
-            std::cout << " measurement update" << std::endl;
+            // std::cout << " measurement update" << std::endl;
 
             mcl_->resample(); 
             // std::cout << " resampling" << std::endl;
-
         }
+
+        else {
+        RCLCPP_WARN(this->get_logger(), "No observations to process!");
+        }
+
         // RCLCPP_INFO(this->get_logger(), "Landmarks observed in frame: %s", msg->header.frame_id.c_str());
 
         publishParticleCloud(msg->header.stamp);

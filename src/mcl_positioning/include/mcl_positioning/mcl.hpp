@@ -33,6 +33,8 @@ public:
     void motionUpdate(double dx, double dy, double dtheta, double dev_xy, double dev_theta);
     void normalizeWeights();
     void resample();
+    Eigen::Vector3d getPoseEstimate() const;
+
 
 private:
     int N_;
@@ -45,6 +47,12 @@ private:
     
     const LandmarkManager& landmark_manager_;
 
+    double measurement_noise_ = 0.5;  // sensor noise std dev
+    static constexpr double Z_HIT = 0.9;
+    static constexpr double Z_RAND = 0.1;
+    static constexpr double Z_MAX = 20.0;  // max sensor range
+
+
     // random number generation
     std::random_device rd_;// produces a seed
     std::mt19937 gen_; // is initialized with that seed
@@ -56,6 +64,8 @@ private:
     void initParticles();
 
     double normalizeAngle(double angle);
+    double comp_gaussian_prob(double value, double mean, double stddev);
+
 
 
 };

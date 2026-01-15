@@ -4,12 +4,13 @@
 MCL::MCL(int num_particles,
          double x_min, double x_max,
          double y_min, double y_max,
-         const LandmarkManager& landmark_manager)
-    : N_(num_particles),
-      x_min_(x_min), x_max_(x_max),
-      y_min_(y_min), y_max_(y_max),
-      landmark_manager_(landmark_manager),
-      gen_(rd_())
+         const LandmarkManager& landmark_manager):
+        N_(num_particles),
+        x_min_(x_min), x_max_(x_max),
+        y_min_(y_min), y_max_(y_max),
+        landmark_manager_(landmark_manager),
+        gen_(rd_())
+
 {
     initParticles();
 }
@@ -54,49 +55,69 @@ void MCL::motionUpdate(double dx, double dy, double dtheta, double dev_xy, doubl
             p.state[2] = normalizeAngle(p.state[2]);
         }
     }
-
-void MCL::measurementUpdate(const std::vector<std::tuple<int, double, double>>& observations) {
+void MCL::measurementUpdate(
+    const std::vector<std::tuple<int, double, double>>& observations)
+{
     if (observations.empty()) return;
 
-    const double sigma_range = 0.2;
-    const double normalizer = 1.0 / (sigma_range * std::sqrt(2.0 * M_PI));
+    std::vector<double> log_weights(N_);
+    
+    for (size_t i = 0; i < particles_.size(); ++i) {
+        auto& p = particles_[i];
+        double log_weight = 0.0;
 
-    for (auto& p : particles_) {
-        double weight = 1.0;
+        double px = p.state[0];
+        double py = p.state[1];
+        double ptheta = p.state[2];
 
-        double cos_th = std::cos(p.state[2]);
-        double sin_th = std::sin(p.state[2]);
+        double c = std::cos(ptheta);
+        double s = std::sin(ptheta);
 
         for (const auto& obs : observations) {
             int lm_id = std::get<0>(obs);
-            double obs_robot_x = std::get<1>(obs);
-            double obs_robot_y = std::get<2>(obs);
+            double obs_x = std::get<1>(obs);
+            double obs_y = std::get<2>(obs);
 
-            //get the landmark positions in global frame
+            if (!landmark_manager_.hasLandmark(lm_id)) {
+                continue;
+            }
+
             auto lm_pos = landmark_manager_.getLandmark(lm_id);
-            double lm_x_global = lm_pos.first;
-            double lm_y_global = lm_pos.second;
+            double lm_x = lm_pos.first;
+            double lm_y = lm_pos.second;
+            
+            // distance from landmark to particle
+            double dx_world = lm_x - px;
+            double dy_world = lm_y - py;
+            
+            // transform into particle body frame
+            double expected_x =  c * dx_world + s * dy_world;
+            double expected_y = -s * dx_world + c * dy_world;
+            
+            // compare expected distance to observed distance in particle body frame
+            double error_x = expected_x - obs_x;
+            double error_y = expected_y - obs_y;
+            double distance = std::sqrt(error_x * error_x + error_y * error_y);
 
-            //subtract landmark positions from particle positions
-            double dx = lm_x_global - p.state[0];
-            double dy = lm_y_global - p.state[1];
-            //convert observations into robot frame
-            double predicted_obs_x =  cos_th * dx + sin_th * dy;
-            double predicted_obs_y = -sin_th * dx + cos_th * dy;
-
-            double ex = obs_robot_x - predicted_obs_x;
-            double ey = obs_robot_y - predicted_obs_y;
-            double sq_dist = ex * ex + ey * ey;
-
-            //Gaussian likelihood model
-            double prob = normalizer * std::exp(-0.5 * sq_dist / (sigma_range * sigma_range));
-            weight *= (prob + 1e-9);
+            // likelihood model
+            double prob_hit  = Z_HIT * comp_gaussian_prob(
+                                   distance, 0.0, measurement_noise_);
+            double prob_rand = Z_RAND / Z_MAX;
+            double prob = prob_hit + prob_rand;
+            
+            log_weight += std::log(prob + 1e-100);
         }
 
-        p.weight = weight;
+        log_weights[i] = log_weight;
     }
 
-    normalizeWeights(); 
+    double max_log_weight = *std::max_element(log_weights.begin(), log_weights.end());
+    
+    for (size_t i = 0; i < particles_.size(); ++i) {
+        particles_[i].weight = std::exp(log_weights[i] - max_log_weight);
+    }
+
+    normalizeWeights();
 }
 
 //A4. resampling
@@ -160,4 +181,11 @@ void MCL::normalizeWeights()
     {
         p.weight /= sum_weights;
     }
+
+}
+
+double MCL::comp_gaussian_prob(double value, double mean, double stddev) {
+    double coeff = 1.0 / (stddev * sqrt(2.0 * M_PI));
+    double exponent = -0.5 * std::pow((value - mean) / stddev, 2);
+    return coeff * exp(exponent);
 }
