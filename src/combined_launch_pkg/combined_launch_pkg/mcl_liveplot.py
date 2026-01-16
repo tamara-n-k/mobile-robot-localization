@@ -19,10 +19,13 @@ class MCLConvergencePlot(Node):
         # -----------------------------
         # Parameters
         # -----------------------------
-        self.T_END = 30.0          # seconds
-        self.WINDOW = 50           # sliding RMSE window
-        self.RMSE_THRESH = 0.25    # meters
-        self.STABLE_TIME = 5.0     # seconds
+        self.T_END = 40.0          # seconds
+        self.WINDOW = 50           # sliding RMSE window for live RMSE calc
+        self.RMSE_THRESH = 0.25    # meters (for closeness threshold)
+        self.STABLE_TIME = 5.0     # seconds (must be below RMSE_THRESH this long)
+
+        self.LOCAL_STAB_WINDOW = 50      # samples ahead to average for local stability
+        self.LOCAL_STAB_THRESH = 0.02    # meters (max allowed change for stability)
 
         # -----------------------------
         # Subscriptions
@@ -54,12 +57,28 @@ class MCLConvergencePlot(Node):
         self.last_time = None
 
         # -----------------------------
-        # Convergence tracking
+        # Stability
         # -----------------------------
         self.stable = False
         self.stable_duration = 0.0
         self.t_stable = None
 
+        # -----------------------------
+        # Convergence tracking (threshold)
+        # -----------------------------
+        self.below_thresh = False
+        self.below_thresh_duration = 0.0
+        self.t_below_thresh_start = None
+
+        # -----------------------------
+        # Convergence tracking (combined local stability)
+        # -----------------------------
+        self.converged = False
+        self.t_converged = None
+
+        # -----------------------------
+        # Tracking steady-state RMSE
+        # -----------------------------
         self.tracking_rmse_buf = []
         self.tracking_line = None
 
@@ -75,7 +94,7 @@ class MCLConvergencePlot(Node):
             self.RMSE_THRESH,
             color='red',
             linestyle=':',
-            label='RMSE threshold'
+            label=f'RMSE Threshold ({self.RMSE_THRESH} m)'
         )
 
         self.ax.set_xlabel("Time [s]")
@@ -99,10 +118,12 @@ class MCLConvergencePlot(Node):
 
         if not file_exists:
             self.csv_writer.writerow([
-                "Stabilization Time [s]",
-                "RMSE at Stabilization [m]",
+                "Convergence Time [s]",
+                "RMSE at Convergence [m]",
+                "Stability Time [s]",
                 "Final Tracking RMSE [m]"
             ])
+
 
         self.save_dir = os.path.join(os.getcwd(), "plots")
         os.makedirs(self.save_dir, exist_ok=True)
@@ -138,9 +159,7 @@ class MCLConvergencePlot(Node):
         self.time.append(t)
         self.pos_rmse.append(rmse)
 
-        # -----------------------------
-        # Convergence logic
-        # -----------------------------
+        # Stability detection
         if not self.stable:
             if rmse < self.RMSE_THRESH:
                 self.stable_duration += dt
@@ -148,20 +167,58 @@ class MCLConvergencePlot(Node):
                     self.stable = True
                     self.t_stable = t
                     self.get_logger().info(
-                        f"MCL converged at t = {t:.2f} s (RMSE = {rmse:.3f} m)"
+                        f"Stability reached at t = {t:.2f} s (RMSE < {self.RMSE_THRESH})"
                     )
                     self.ax.axvline(
                         t,
                         color='green',
                         linestyle='--',
-                        label='Converged'
+                        label='Stable'
                     )
                     self.ax.legend()
             else:
                 self.stable_duration = 0.0
 
-        # Track steady-state RMSE
-        if self.stable:
+        # Step 1: Threshold + time stability check (for convergence)
+        if rmse < self.RMSE_THRESH:
+            if not self.below_thresh:
+                self.below_thresh = True
+                self.below_thresh_duration = 0.0
+                self.t_below_thresh_start = t
+            else:
+                self.below_thresh_duration += dt
+        else:
+            self.below_thresh = False
+            self.below_thresh_duration = 0.0
+            self.t_below_thresh_start = None
+
+        # Step 2: Local stability check for convergence
+        if (self.below_thresh and
+            self.below_thresh_duration >= self.STABLE_TIME and
+            not self.converged and
+            len(self.pos_rmse) > self.LOCAL_STAB_WINDOW * 2):
+
+            i = len(self.pos_rmse) - 1 - self.LOCAL_STAB_WINDOW
+            current_err = self.pos_rmse[i]
+            future_avg = np.mean(self.pos_rmse[i + 1 : i + 1 + self.LOCAL_STAB_WINDOW])
+
+            if abs(current_err - future_avg) <= self.LOCAL_STAB_THRESH:
+                self.converged = True
+                self.t_converged = self.time[i]
+                self.rmse_at_convergence = current_err
+                self.get_logger().info(
+                    f"MCL converged at t = {self.t_converged:.2f} s (RMSE = {current_err:.3f} m)"
+                )
+                # self.ax.axvline(
+                #     self.t_converged,
+                #     color='blue',
+                #     linestyle='--',
+                #     label='Converged'
+                # )
+                self.ax.legend()
+
+        # Track steady-state RMSE after convergence
+        if self.converged:
             self.tracking_rmse_buf.append(rmse)
 
             mean_tracking_rmse = np.mean(self.tracking_rmse_buf)
@@ -174,13 +231,9 @@ class MCLConvergencePlot(Node):
                 )
                 self.ax.legend()
             else:
-                self.tracking_line.set_ydata(
-                    [mean_tracking_rmse, mean_tracking_rmse]
-                )
+                self.tracking_line.set_ydata([mean_tracking_rmse, mean_tracking_rmse])
 
-        # -----------------------------
         # End of experiment
-        # -----------------------------
         if t >= self.T_END:
             final_tracking_rmse = (
                 np.mean(self.tracking_rmse_buf)
@@ -188,10 +241,12 @@ class MCLConvergencePlot(Node):
             )
 
             self.csv_writer.writerow([
+                self.t_converged,
+                self.rmse_at_convergence,
                 self.t_stable,
-                self.pos_rmse[-1],
                 final_tracking_rmse
             ])
+
             self.csv_file.close()
 
             self.fig.savefig(
@@ -202,8 +257,6 @@ class MCLConvergencePlot(Node):
 
             self.get_logger().info("MCL evaluation finished.")
             rclpy.shutdown()
-
-    # --------------------------------------------------
 
     def compute_position_rmse(self):
         p1 = self.odom.pose.pose.position
