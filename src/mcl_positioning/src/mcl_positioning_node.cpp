@@ -21,15 +21,14 @@ public:
     
         this->declare_parameter<std::string>("landmarks_csv_path", "");
         this->declare_parameter<int>("num_particles", 500);
-        // this->declare_parameter<double>("x_min", -10.0);
-        // this->declare_parameter<double>("y_min", -10.0);    
-        // this->declare_parameter<double>("x_max", 10.0);
-        // this->declare_parameter<double>("y_max", 10.0);
-        this->declare_parameter<double>("dev_xy", 0.01);
-        this->declare_parameter<double>("dev_theta", 0.01);
 
-        dev_xy_ = this->get_parameter("dev_xy").as_double();
-        dev_theta_ = this->get_parameter("dev_theta").as_double();
+        this->declare_parameter<double>("motion_noise_xy", 0.01);
+        this->declare_parameter<double>("motion_noise_theta", 0.01);
+        this->declare_parameter<double>("measurement_noise", 0.01);
+
+        motion_noise_xy_ = this->get_parameter("motion_noise_xy").as_double();
+        motion_noise_theta_ = this->get_parameter("motion_noise_theta").as_double();
+        measurement_noise_ = this->get_parameter("measurement_noise").as_double();
 
         std::string csv_path = this->get_parameter("landmarks_csv_path").as_string();
         int num_particles = this->get_parameter("num_particles").as_int();
@@ -83,8 +82,9 @@ private:
 
     rclcpp::Time last_time_;
     double last_x_ = 0.0, last_y_ = 0.0, last_theta_ = 0.0;
-    double dev_xy_;
-    double dev_theta_;
+    double motion_noise_xy_;
+    double motion_noise_theta_;
+    double measurement_noise_;
 
     void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
         //odometry msg in global frame
@@ -98,19 +98,19 @@ private:
             return;
         }
 
-        // Calculate deltas for Motion Model (Task A2)
+        // calculate deltas for motion model
         double dx = x - last_x_;
         double dy = y - last_y_;
         double dtheta = normalizeAngle(theta - last_theta_);
 
-        // Update Particles
-        mcl_->motionUpdate(dx, dy, dtheta, dev_xy_, dev_theta_);
-        // std::cout << " motion update" << std::endl;
+        // update Particles
+        mcl_->motionUpdate(dx, dy, dtheta, motion_noise_xy_, motion_noise_theta_);
 
-
-        last_x_ = x; last_y_ = y; last_theta_ = theta;
+        // saving for next loop
+        last_x_ = x; 
+        last_y_ = y; 
+        last_theta_ = theta;
         last_time_ = msg->header.stamp;
-        // RCLCPP_INFO(this->get_logger(), "%s", msg->header.frame_id.c_str());
 
     }
     
@@ -145,18 +145,14 @@ private:
         }
 
         if (!observations.empty()) {
-            mcl_->measurementUpdate(observations);
-            // std::cout << " measurement update" << std::endl;
+            mcl_->measurementUpdate(observations, measurement_noise_);
 
             mcl_->resample(); 
-            // std::cout << " resampling" << std::endl;
         }
 
         else {
         RCLCPP_WARN(this->get_logger(), "No observations to process!");
         }
-
-        // RCLCPP_INFO(this->get_logger(), "Landmarks observed in frame: %s", msg->header.frame_id.c_str());
 
         publishParticleCloud(msg->header.stamp);
         publishEstimatedOdometry(msg->header.stamp);

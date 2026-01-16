@@ -26,26 +26,25 @@ def generate_launch_description():
         'num_particles',
         default_value='100'
     )
-    
-    x_min = DeclareLaunchArgument(
-        'x_min',
-        default_value='-10.0'
-    )
-    
-    x_max = DeclareLaunchArgument(
-        'x_max',
-        default_value='10.0'
-    )
-    
-    y_min = DeclareLaunchArgument(
-        'y_min',
-        default_value='-10.0'
+
+    motion_noise_xy = DeclareLaunchArgument(
+        'motion_noise_xy',
+        default_value='0.01'
     )
 
-    y_max = DeclareLaunchArgument(
-        'y_max',
-        default_value='10.0'
+    motion_noise_theta = DeclareLaunchArgument(
+        'motion_noise_theta',
+        default_value='0.01'
     )
+
+    measurement_noise = DeclareLaunchArgument(
+        'measurement_noise',
+        default_value='0.2'
+    )
+
+
+    
+   
     
     # Optional logging level argument
     log_level_arg = DeclareLaunchArgument(
@@ -75,35 +74,36 @@ def generate_launch_description():
             {
                 'landmarks_csv_path': LaunchConfiguration('landmarks_csv_path'),
                 'num_particles': LaunchConfiguration('num_particles'),
-                'x_min': LaunchConfiguration('x_min'),
-                'x_max': LaunchConfiguration('x_max'),
-                'y_min': LaunchConfiguration('y_min'),
-                'y_max': LaunchConfiguration('y_max'),
+                'motion_noise_xy': LaunchConfiguration('motion_noise_xy'),
+                'motion_noise_theta': LaunchConfiguration('motion_noise_theta'),
+                'measurement_noise': LaunchConfiguration('measurement_noise')
+
+
+                
             }
         ],
-        remappings=[
-            # Uncomment and modify if you want to remap input/output topics
-            # ('/robot_noisy', '/odometry/noisy'),
-            # ('/landmarks_observed', '/sensor/landmarks'),
-            # ('/robot_estimated_odometry', '/odometry/filtered'),
-        ]
+
+        
     )
     
     # Info message about the launch
     log_info = LogInfo(
         msg=['Starting MCL Positioning Node with parameters:',
              ' - Landmarks CSV: ', LaunchConfiguration('landmarks_csv_path'),
-             ' - Num Particles: ', LaunchConfiguration('num_particles')
+             ' - Num Particles: ', LaunchConfiguration('num_particles'),
+                '- motion_noise_xy: ', LaunchConfiguration('motion_noise_xy'),
+                ' - motion_noise_theta: ',  LaunchConfiguration('motion_noise_theta'),
+                ' - measurement_noise: ',  LaunchConfiguration('measurement_noise')
+
             ]
     )
     
     return LaunchDescription([
         landmarks_csv_arg,
         num_particles,
-        x_min,
-        x_max,
-        y_min,
-        y_max,
+        motion_noise_xy,
+        motion_noise_theta,
+        measurement_noise,
         log_level_arg,
         namespace_arg,
         log_info,

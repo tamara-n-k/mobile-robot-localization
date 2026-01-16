@@ -29,7 +29,7 @@ public:
         double range;  // observed distance to the landmark
     };
 
-    void measurementUpdate(const std::vector<std::tuple<int, double, double>>& observations);
+    void measurementUpdate(const std::vector<std::tuple<int, double, double>>& observations, double measurement_noise_);
     void motionUpdate(double dx, double dy, double dtheta, double dev_xy, double dev_theta);
     void normalizeWeights();
     void resample();
@@ -47,7 +47,6 @@ private:
     
     const LandmarkManager& landmark_manager_;
 
-    double measurement_noise_ = 0.5;  // sensor noise std dev
     static constexpr double Z_HIT = 0.9;
     static constexpr double Z_RAND = 0.1;
     static constexpr double Z_MAX = 20.0;  // max sensor range
