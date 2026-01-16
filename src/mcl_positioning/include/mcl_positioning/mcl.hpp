@@ -47,9 +47,9 @@ private:
     
     const LandmarkManager& landmark_manager_;
 
-    static constexpr double Z_HIT = 0.9;
-    static constexpr double Z_RAND = 0.1;
-    static constexpr double Z_MAX = 20.0;  // max sensor range
+    static constexpr double Z_HIT = 0.95;
+    static constexpr double Z_RAND = 0.05;
+    static constexpr double Z_MAX = 3.0;
 
 
     // random number generation

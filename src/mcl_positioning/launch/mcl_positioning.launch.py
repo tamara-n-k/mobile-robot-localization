@@ -24,22 +24,22 @@ def generate_launch_description():
     
     num_particles = DeclareLaunchArgument(
         'num_particles',
-        default_value='100'
+        default_value='500'
     )
 
     motion_noise_xy = DeclareLaunchArgument(
         'motion_noise_xy',
-        default_value='0.01'
+        default_value='0.05'
     )
 
     motion_noise_theta = DeclareLaunchArgument(
         'motion_noise_theta',
-        default_value='0.01'
+        default_value='0.05'
     )
 
     measurement_noise = DeclareLaunchArgument(
         'measurement_noise',
-        default_value='0.2'
+        default_value='0.1'
     )
 
 
