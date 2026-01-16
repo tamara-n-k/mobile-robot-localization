@@ -20,47 +20,28 @@ def generate_launch_description():
     positioning_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             os.path.join(
-                FindPackageShare('kalman_positioning').find('kalman_positioning'),
+                FindPackageShare('mcl_positioning').find('mcl_positioning'),
                 'launch',
-                'positioning.launch.py'
+                'mcl_positioning.launch.py'
             )
         ])
     )
     delayed_nodes = TimerAction(
         period=1.0,  # delay in seconds
-        actions=[positioning_launch, fake_robot_launch],
+        actions=[positioning_launch],
     )
 
     odom_plot_node = Node(
     package='combined_launch_pkg',
-    executable='liveplot',
-    name='odom_convergence_plot',
+    executable='mcl_liveplot',
+    name='mcl_convergence_plot',
     output='screen'
     )
 
 
-    
-    rosbag_record = ExecuteProcess(
-        cmd=[
-            'ros2', 'bag', 'record',
-            '-o', 'src/combined_launch_pkg/mn_0.0001',
-            '/robot_gt',
-            '/robot_estimated_odometry'
-        ],
-        output='screen'
-
-    )
-
-
-    stop_launch_timer = TimerAction(
-        period=30.0,
-        actions=[
-            Shutdown(reason='Fixed-duration recording completed.')
-        ]
-    )
-
     return LaunchDescription([
         odom_plot_node,
+        fake_robot_launch,
         delayed_nodes
         # rosbag_record,
         # stop_launch_timer

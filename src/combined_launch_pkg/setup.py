@@ -27,7 +27,7 @@ setup(
  
     entry_points={
     'console_scripts': [
-        'liveplot = combined_launch_pkg.liveplot:main',
+        'mcl_liveplot = combined_launch_pkg.mcl_liveplot:main',
     ],
 },
 
